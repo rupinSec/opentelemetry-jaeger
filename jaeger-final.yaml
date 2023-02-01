@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+ name: jaeger-all-in-one
+ namespace: opentelemetry
+ labels:
+   app: opentelemetry
+   component: optl-collector
+   name: jaeger
+spec:
+  serviceName: "jaeger-headless"
+  replicas: 1
+  selector:
+   matchLabels:
+     app: opentelemetry
+     component: optl-collector
+     name: jaeger 
+  template:
+   metadata:
+     labels:
+       app: opentelemetry
+       component: optl-collector
+       name: jaeger 
+   spec:
+     containers:
+       - image: jaegertracing/all-in-one:latest
+         name: jaeger
+         ports:
+          - containerPort: 16686
+          - containerPort: 14250
+          - containerPort: 4317
+         env:
+         - name: SPAN_STORAGE_TYPE
+           value: "badger"
+         - name: "COLLECTOR_OTLP_ENABLED"
+           value: "true"
+         - name: "BADGER_EPHEMERAL"
+           value: "false"
+         - name: "BADGER_DIRECTORY_VALUE"
+           value: "/badger/data"
+         - name: "BADGER_DIRECTORY_KEY"
+           value: "/badger/key"
+         volumeMounts:
+         - name: jaeger-pvc
+           mountPath: /badger
+  volumeClaimTemplates:
+  - metadata:
+      name: jaeger-pvc
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 20Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-headless
+  namespace: opentelemetry
+  labels:
+   app: opentelemetry
+   component: optl-collector
+spec:
+  ports:
+  - port: 16686
+    name: web
+  - port: 14250
+    name: optl-connection
+  - port: 4317
+    name: grpc
+  clusterIP: None
+  selector:
+       app: opentelemetry
+       component: optl-collector
+       name: jaeger
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-query
+  namespace: opentelemetry
+  labels:
+   app: opentelemetry
+   component: optl-collector
+   name: jaeger
+spec:
+  ports:
+  - name: query-http
+    port: 16686
+    protocol: TCP
+  selector:
+      app: opentelemetry
+      component: optl-collector
+      name: jaeger
+  type: ClusterIP
